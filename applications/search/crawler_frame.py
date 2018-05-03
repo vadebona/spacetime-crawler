@@ -65,21 +65,31 @@ def extract_next_links(rawDataObj):
 
     Suggested library: lxml
     '''
+     outputLinks = set()
 
-    outputLinks = []
     s = BeautifulSoup(rawDataObj.content, 'lxml')
     links = s.find_all("a", href=True)
-    baseURL = rawDataObj.url
+    baseURL = urlparse(rawDataObj.url).netloc # netloc gets the domain url
+    print "baseURL: ", baseURL
+    dynamicSymbols = ["#", "?", "%"]
 
     for l in links:
         currLink = l['href']
-        # if a website link doesn't match [insert regular expression for absolute links], then:
+
+        if "mailto" in currLink:
+            continue
+
+        stringMatch = re.search("^(https?):\/\/(www.)?\S+(.[a-z]{3})\/\S*$", currLink)
+        if not stringMatch:
             currLink = baseURL + currLink
-        print currLink
-        outputLinks.append(l['href'])
+        for ds in dynamicSymbols:
+            if not ds in currLink:
+                outputLinks.add(currLink)
 
 
-    return outputLinks
+    for link in outputLinks:
+        print link;
+    return list(outputLinks)
 
 def is_valid(url):
     '''
