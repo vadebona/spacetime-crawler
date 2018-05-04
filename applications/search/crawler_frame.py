@@ -84,7 +84,11 @@ def extract_next_links(rawDataObj):
     for l in links:
         currLink = l['href']
 
-        if rawDataObj.error_message == "404":
+        if rawDataObj.is_redirected:
+            if "calendar" in rawDataObj.final_url:
+                continue
+
+        if rawDataObj.http_code == "404":
             continue
 
         if "#" in currLink:
@@ -121,6 +125,11 @@ def is_valid(url):
     if parsed.scheme not in set(["http", "https"]):
         return False
 
+
+    if "calendar" in parsed.path:
+        if parsed.query:
+            return False
+
     if parsed.netloc == "calendar.ics.uci.edu":
         return False
 
@@ -128,7 +137,7 @@ def is_valid(url):
         return False
 
     # duplicate directories in a link:
-    parsedList = url.split("/")
+    parsedList = parsed.path.split("/")
     parsedSet = set()
     for pl in parsedList:
         if pl in parsedSet:
