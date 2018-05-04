@@ -10,9 +10,12 @@ from uuid import uuid4
 
 from urlparse import urlparse, parse_qs
 from uuid import uuid4
+import requests, urllib2
 
 logger = logging.getLogger(__name__)
 LOG_HEADER = "[CRAWLER]"
+
+visitedLinks = set()
 
 @Producer(VadebonaAdesanyoKdmontenLink)
 @GetterSetter(OneVadebonaAdesanyoKdmontenUnProcessedLink)
@@ -54,6 +57,12 @@ class CrawlerFrame(IApplication):
             "Time time spent this session: ",
             time() - self.starttime, " seconds.")
 
+def is_absolute(link):
+    if link[0:4]=='www.':
+        link='http://'+link
+    status=bool(urlparse(link).netloc)
+    return (status,link)
+
 def extract_next_links(rawDataObj):
     '''
     rawDataObj is an object of type UrlResponse declared at L20-30
@@ -65,30 +74,30 @@ def extract_next_links(rawDataObj):
 
     Suggested library: lxml
     '''
-     outputLinks = set()
+    outputLinks = set()
 
     s = BeautifulSoup(rawDataObj.content, 'lxml')
     links = s.find_all("a", href=True)
-    baseURL = urlparse(rawDataObj.url).netloc # netloc gets the domain url
+    baseURL = "http://" + urlparse(rawDataObj.url).netloc # netloc gets the domain url
     print "baseURL: ", baseURL
-    dynamicSymbols = ["#", "?", "%"]
 
     for l in links:
         currLink = l['href']
 
+        if rawDataObj.error_message == "404":
+            continue
+
+        if "#" in currLink:
+            continue
+
         if "mailto" in currLink:
             continue
 
-        stringMatch = re.search("^(https?):\/\/(www.)?\S+(.[a-z]{3})\/\S*$", currLink)
-        if not stringMatch:
+        if not is_absolute(currLink)[0]:
             currLink = baseURL + currLink
-        for ds in dynamicSymbols:
-            if not ds in currLink:
-                outputLinks.add(currLink)
 
+        outputLinks.add(currLink)
 
-    for link in outputLinks:
-        print link;
     return list(outputLinks)
 
 def is_valid(url):
@@ -98,20 +107,52 @@ def is_valid(url):
     Robot rules and duplication rules are checked separately.
     This is a great place to filter out crawler traps.
     '''
+    ## CRAWLER TRAP CHECKS:
+    # [x] calendar.ics.uci.edu is filtered
+    # [x] Length does not exceed 100 characters
+    # [x] Not already in visitedLinks set
+    # [x] finding duplicate directories in a link
+
+    if url in visitedLinks:
+        return False
+
     parsed = urlparse(url)
+
     if parsed.scheme not in set(["http", "https"]):
         return False
+
+    if parsed.netloc == "calendar.ics.uci.edu":
+        return False
+
+    if len(url) > 100:
+        return False
+
+    # duplicate directories in a link:
+    parsedList = url.split("/")
+    parsedSet = set()
+    for pl in parsedList:
+        if pl in parsedSet:
+            return False
+        parsedSet.add(pl)
+
     try:
-        return ".ics.uci.edu" in parsed.hostname \
+        if ".ics.uci.edu" in parsed.hostname \
             and not re.match(".*\.(css|js|bmp|gif|jpe?g|ico" + "|png|tiff?|mid|mp2|mp3|mp4"\
             + "|wav|avi|mov|mpeg|ram|m4v|mkv|ogg|ogv|pdf" \
             + "|ps|eps|tex|ppt|pptx|doc|docx|xls|xlsx|names|data|dat|exe|bz2|tar|msi|bin|7z|psd|dmg|iso|epub|dll|cnf|tgz|sha1" \
             + "|thmx|mso|arff|rtf|jar|csv"\
-            + "|rm|smil|wmv|swf|wma|zip|rar|gz|pdf)$", parsed.path.lower())
+            + "|rm|smil|wmv|swf|wma|zip|rar|gz|pdf)$", parsed.path.lower()):
+            print url
+            visitedLinks.add(url)
+            return True
+        else:
+            return False
 
     except TypeError:
         print ("TypeError for ", parsed)
         return False
+
+
 
 if __name__ == '__main__':
     extract_next_links()
