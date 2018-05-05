@@ -16,6 +16,10 @@ logger = logging.getLogger(__name__)
 LOG_HEADER = "[CRAWLER]"
 
 visitedLinks = set()
+subdomains_count={}
+max_page_links=('',0)
+Invalid_Links=set()
+crawler_traps=set()
 
 @Producer(VadebonaAdesanyoKdmontenLink)
 @GetterSetter(OneVadebonaAdesanyoKdmontenUnProcessedLink)
@@ -81,24 +85,43 @@ def extract_next_links(rawDataObj):
     baseURL = "http://" + urlparse(rawDataObj.url).netloc # netloc gets the domain url
     print "baseURL: ", baseURL
 
+    global subdomains_count
+    global max_page_links
+    global crawler_traps
+    global Invalid_Links
+    global visitedLinks
+
+    linksCount=len(links)
+    subdomains_count[baseURL]=linksCount
+    if linksCount >  max_page_links[1]:
+        max_page_links=(baseURL,linksCount)
+
     for l in links:
         currLink = l['href']
 
         if rawDataObj.is_redirected:
             if "calendar" in rawDataObj.final_url:
-                continue
+				crawler_traps.add(currLink)
+				continue
 
         if rawDataObj.http_code == "404":
-            continue
+			Invalid_Links.add(currLink)
+			continue
 
         if "#" in currLink:
-            continue
+			Invalid_Links.add(currLink)
+			continue
 
         if "mailto" in currLink:
-            continue
+			Invalid_Links.add(currLink)
+			continue
 
         if not is_absolute(currLink)[0]:
             currLink = baseURL + currLink
+
+        if is_absolute(currLink)[0]==False:
+            Invalid_Links.add(currLink)
+            continue
 
         outputLinks.add(currLink)
 
@@ -117,6 +140,12 @@ def is_valid(url):
     # [x] Not already in visitedLinks set
     # [x] finding duplicate directories in a link
 
+    global subdomains_count
+    global max_page_links
+    global crawler_traps
+    global Invalid_Links
+    global visitedLinks
+    
     if url in visitedLinks:
         return False
 
@@ -128,22 +157,26 @@ def is_valid(url):
 
     if "calendar" in parsed.path:
         if parsed.query:
-            return False
+			crawler_traps.add(url)
+			return False
 
     if parsed.netloc == "calendar.ics.uci.edu":
+        crawler_traps.add(url)
         return False
 
     if len(url) > 100:
-        return False
+		crawler_traps.add(url)
+		Invalid_Links.add(url)
+		return False
 
     # duplicate directories in a link:
     parsedList = parsed.path.split("/")
     parsedSet = set()
     for pl in parsedList:
         if pl in parsedSet:
+            crawler_traps.add(url)
             return False
         parsedSet.add(pl)
-
     try:
         if ".ics.uci.edu" in parsed.hostname \
             and not re.match(".*\.(css|js|bmp|gif|jpe?g|ico" + "|png|tiff?|mid|mp2|mp3|mp4"\
@@ -161,7 +194,33 @@ def is_valid(url):
         print ("TypeError for ", parsed)
         return False
 
+def write_Analytics():
+    global subdomains_count
+    global max_page_links
+    global crawler_traps
+    global Invalid_Links
+    global visitedLinks
+    
+    file = open("Analytics","w")
+    file.write("Base URL: Link Count")
+    for key,value in subdomains_count.items():
+        file.write("{} : {}".format(key,value))
+    file.write("----------------------------------------------------------------------------")
+    file.write("Invalid Links")
+    file.write("----------------------------------------------------------------------------")
+    for link in Invalid_Links:
+        file.write(link)
+    file.write("----------------------------------------------------------------------------")
+    file.write("Crawler Traps")
+    file.write("----------------------------------------------------------------------------")
+    for link in crawler_traps:
+        file.write(link)
+    file.close()
+
+
+
 
 
 if __name__ == '__main__':
     extract_next_links()
+    write_Analytics()
