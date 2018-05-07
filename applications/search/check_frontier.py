@@ -6,6 +6,7 @@ import argparse
 import uuid
 from time import time
 
+
 sys.path.append(os.path.realpath(os.path.join(os.path.dirname(__file__), "../..")))
 
 from datamodel.search.VadebonaAdesanyoKdmonten_datamodel import VadebonaAdesanyoKdmontenLink

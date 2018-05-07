@@ -11,12 +11,16 @@ from uuid import uuid4
 from urlparse import urlparse, parse_qs
 from uuid import uuid4
 import requests, urllib2
+import re
 
 logger = logging.getLogger(__name__)
 LOG_HEADER = "[CRAWLER]"
 
 visitedLinks = set()
-invalidLinks = []
+subdomains_count={}
+max_page_links=('',0)
+Invalid_Links=set()
+crawler_traps=set()
 
 @Producer(VadebonaAdesanyoKdmontenLink)
 @GetterSetter(OneVadebonaAdesanyoKdmontenUnProcessedLink)
@@ -54,6 +58,7 @@ class CrawlerFrame(IApplication):
                     self.frame.add(VadebonaAdesanyoKdmontenLink(l))
 
     def shutdown(self):
+        write_Analytics()
         print (
             "Time time spent this session: ",
             time() - self.starttime, " seconds.")
@@ -82,24 +87,51 @@ def extract_next_links(rawDataObj):
     baseURL = "http://" + urlparse(rawDataObj.url).netloc  + "/"# netloc gets the domain url
     print "baseURL: ", baseURL
 
+    global subdomains_count
+    global max_page_links
+    global crawler_traps
+    global Invalid_Links
+    global visitedLinks
+
+    linksCount=len(links)
+    subdomains_count[rawDataObj.url]=linksCount
+    subdomains_report(rawDataObj.url,linksCount)
+    if linksCount >  max_page_links[1]:
+        max_page_links=(rawDataObj.url,linksCount)
+        most_out_links_report(rawDataObj.url,linksCount)
+
     for l in links:
         currLink = l['href']
 
         if rawDataObj.is_redirected:
             if "calendar" in rawDataObj.final_url:
-                continue
+                crawler_traps.add(currLink)
+                Invalid_Crawler_Trap(currLink,"Crawler Trap calendar")
+            continue
 
         if rawDataObj.http_code == "404":
+            Invalid_Links.add(currLink)
+            Invalid_Crawler_Trap(currLink,"Invalid Link: 404")
             continue
 
         if "#" in currLink:
+            Invalid_Links.add(currLink)
+            Invalid_Crawler_Trap(currLink,"Invalid Link")
             continue
 
         if "mailto" in currLink:
+            Invalid_Links.add(currLink)
+            Invalid_Crawler_Trap(currLink,"Invalid Link: Mail")
             continue
 
         if not is_absolute(currLink)[0]:
             currLink = baseURL + currLink
+
+        if is_absolute(currLink)[0]==False:
+            Invalid_Links.add(currLink)
+            Invalid_Crawler_Trap(currLink,"Invalid Link: Not Absolute")
+
+            continue
 
         outputLinks.add(currLink)
 
@@ -118,7 +150,14 @@ def is_valid(url):
     # [x] Not already in visitedLinks set
     # [x] finding duplicate directories in a link
 
+    global subdomains_count
+    global max_page_links
+    global crawler_traps
+    global Invalid_Links
+    global visitedLinks
+
     if url in visitedLinks:
+        Invalid_Crawler_Trap(url,"Crawler Trap Duplicate url")
         return False
 
     parsed = urlparse(url)
@@ -130,23 +169,30 @@ def is_valid(url):
 
     if "calendar" in parsed.path:
         if parsed.query:
-            invalidLinks.append(url)
+            crawler_traps.add(url)
+            Invalid_Crawler_Trap(url,"Crawler Trap calendar")
             return False
 
     if parsed.netloc == "calendar.ics.uci.edu":
-        invalidLinks.append(url)
+        crawler_traps.add(url)
+        Invalid_Crawler_Trap(url,"Crawler Trap contains calendar")
         return False
 
     if len(url) > 100:
-        invalidLinks.append(url)
+        crawler_traps.add(url)
+        Invalid_Links.add(url)
+        Invalid_Crawler_Trap(url,"Crawler Trap url len > 100")
         return False
 
     # duplicate directories in a link:
+
     parsedList = parsed.path.split("/")
     parsedSet = set()
     for pl in parsedList:
         if pl in parsedSet:
-            invalidLinks.append(url)
+        #if parsedList.count(pl)>1:
+            crawler_traps.add(url)
+            Invalid_Crawler_Trap(url,"Crawler Trap Duplicate Directories")
             return False
         parsedSet.add(pl)
 
@@ -169,7 +215,40 @@ def is_valid(url):
         invalidLinks.append(url)
         return False
 
+def subdomains_report(link,count):
+    file = open("Analytics_subdomains_report.txt","a")
+    file.write("{} : {}\n".format(link,count))
+    file.close()
 
+def most_out_links_report(link,count):
+    file = open("Analytics_most_out_links_report.txt","w")
+    file.write("{} : {}\n".format(link,count))
+    file.close()
 
-if __name__ == '__main__':
-    extract_next_links()
+def Invalid_Crawler_Trap(link,label):
+    file = open("Analytics_Invalid_CrawlerTraps_report.txt","a")
+    file.write("{} : {}\n".format(link,label))
+    file.close()
+
+def write_Analytics():
+    global subdomains_count
+    global max_page_links
+    global crawler_traps
+    global Invalid_Links
+    global visitedLinks
+
+    file = open("Analytics.txt","w")
+    file.write("Base URL: Link Count")
+    for key,value in subdomains_count.items():
+        file.write("{} : {}".format(key,value))
+    file.write("----------------------------------------------------------------------------")
+    file.write("Invalid Links")
+    file.write("----------------------------------------------------------------------------")
+    for link in Invalid_Links:
+        file.write(link)
+    file.write("----------------------------------------------------------------------------")
+    file.write("Crawler Traps")
+    file.write("----------------------------------------------------------------------------")
+    for link in crawler_traps:
+        file.write(link)
+    file.close()
