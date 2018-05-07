@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 LOG_HEADER = "[CRAWLER]"
 
 visitedLinks = set()
+invalidLinks = []
 
 @Producer(VadebonaAdesanyoKdmontenLink)
 @GetterSetter(OneVadebonaAdesanyoKdmontenUnProcessedLink)
@@ -78,7 +79,7 @@ def extract_next_links(rawDataObj):
 
     s = BeautifulSoup(rawDataObj.content, 'lxml')
     links = s.find_all("a", href=True)
-    baseURL = "http://" + urlparse(rawDataObj.url).netloc # netloc gets the domain url
+    baseURL = "http://" + urlparse(rawDataObj.url).netloc  + "/"# netloc gets the domain url
     print "baseURL: ", baseURL
 
     for l in links:
@@ -123,17 +124,21 @@ def is_valid(url):
     parsed = urlparse(url)
 
     if parsed.scheme not in set(["http", "https"]):
+        invalidLinks.append(url)
         return False
 
 
     if "calendar" in parsed.path:
         if parsed.query:
+            invalidLinks.append(url)
             return False
 
     if parsed.netloc == "calendar.ics.uci.edu":
+        invalidLinks.append(url)
         return False
 
     if len(url) > 100:
+        invalidLinks.append(url)
         return False
 
     # duplicate directories in a link:
@@ -141,6 +146,7 @@ def is_valid(url):
     parsedSet = set()
     for pl in parsedList:
         if pl in parsedSet:
+            invalidLinks.append(url)
             return False
         parsedSet.add(pl)
 
@@ -155,10 +161,12 @@ def is_valid(url):
             visitedLinks.add(url)
             return True
         else:
+            invalidLinks.append(url)
             return False
 
     except TypeError:
         print ("TypeError for ", parsed)
+        invalidLinks.append(url)
         return False
 
 
