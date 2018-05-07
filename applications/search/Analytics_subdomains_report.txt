@@ -1,0 +1,8 @@
+http://www.ics.uci.edu : 94
+http://www.ics.uci.edu : 94
+http://www.ics.uci.edu : 94
+http://www.ics.uci.edu/prospective : 41
+http://www.ics.uci.edu/community/news/view_news?id=1271 : 97
+http://www.ics.uci.edu/student_blogs/index.php : 0
+http://www.ics.uci.edu/index.php : 94
+http://www.ics.uci.edu/press/index.php : 0

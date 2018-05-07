@@ -163,7 +163,7 @@ def is_valid(url):
     parsed = urlparse(url)
 
     if parsed.scheme not in set(["http", "https"]):
-        invalidLinks.append(url)
+        Invalid_Links.add(url)
         return False
 
 
@@ -207,12 +207,12 @@ def is_valid(url):
             visitedLinks.add(url)
             return True
         else:
-            invalidLinks.append(url)
+            Invalid_Links.add(url)
             return False
 
     except TypeError:
         print ("TypeError for ", parsed)
-        invalidLinks.append(url)
+        Invalid_Links.add(url)
         return False
 
 def subdomains_report(link,count):
